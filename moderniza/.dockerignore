@@ -1,0 +1,18 @@
+# Lo que NO entra en la imagen de producción (Tarea 5)
+.env
+.env.*
+!.env.example
+vendor
+node_modules
+public/build
+public/hot
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*.php
+.phpunit.cache
+.git
+deploy/aws/.env.production
+deploy/aws/*.sql.gz
+deploy/aws/*.sql

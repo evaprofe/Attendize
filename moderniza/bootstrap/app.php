@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Tarea 5: en AWS, Caddy recibe HTTPS y reenvía a Laravel por HTTP.
+        // Confiar en sus cabeceras X-Forwarded-* para generar URLs https://
+        // (solo llega tráfico del proxy: el contenedor no publica puertos).
+        $middleware->trustProxies(at: '*');
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
         ]);

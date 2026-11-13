@@ -1,0 +1,46 @@
+# =============================================================================
+# Moderniza en EC2 (Tarea 5)
+#   - moderniza: imagen de ECR (Laravel 13 + Apache). NO publica puertos.
+#   - caddy: proxy HTTPS en 80/443 que reenvía a moderniza.
+#   - No hay servicio "db": la base es Amazon RDS (DB_HOST en .env.production).
+#
+# Uso (en la instancia EC2, dentro de esta carpeta):
+#   export MODERNIZA_IMAGE=<cuenta>.dkr.ecr.<region>.amazonaws.com/moderniza-<alumno>:tarea-05-rc1
+#   docker compose -f compose.aws.yml up -d
+# =============================================================================
+services:
+  moderniza:
+    image: ${MODERNIZA_IMAGE:?Define MODERNIZA_IMAGE con la imagen de ECR}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    volumes:
+      # Sesiones de usuario: se conservan al reiniciar o actualizar la imagen
+      - moderniza-sessions:/var/www/html/storage/framework/sessions
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost/up"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Dominio público, p. ej. 3-80-12-34.sslip.io (IP de la instancia con guiones)
+      SITE_DOMAIN: ${SITE_DOMAIN:?Define SITE_DOMAIN}
+      # Vacío = certificado público automático (Let's Encrypt).
+      # "tls internal" = certificado autofirmado (si el laboratorio no permite el anterior).
+      CADDY_TLS: ${CADDY_TLS:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - moderniza
+
+volumes:
+  moderniza-sessions:
+  caddy-data:
