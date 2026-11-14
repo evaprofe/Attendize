@@ -29,6 +29,8 @@ Navegador ──HTTPS──► EC2 [ caddy :443 ──► moderniza (Apache + PH
 - La etiqueta `tarea-04-entrega` funciona en local y sus pruebas pasan.
 - `moderniza/composer.lock` y `moderniza/package-lock.json` están en el repositorio.
 - AWS CLI v2 instalada en tu ordenador. Las credenciales temporales del laboratorio (*AWS Details*) se copian en `~/.aws/credentials` y **caducan** al terminar la sesión del laboratorio.
+- Alternativa sin copiar claves para las órdenes `aws` de los apartados 2, 3, 5, 8 y 9: **AWS CloudShell** (icono `>_` de la consola, región `us-east-1`). Usa la sesión de la consola. El terminal de la propia página del Learner Lab puede no tener permisos para crear recursos.
+- `composer.lock` debe estar generado con el contenedor de desarrollo de Moderniza (PHP 8.3). Si se genera con un PHP más moderno, `docker build` falla en el paso `composer install`.
 
 ## 1. Versión candidata e imagen en ECR (en tu ordenador)
 
@@ -62,11 +64,13 @@ git worktree remove ../t4
 
 ## 2. Red y grupos de seguridad
 
+> AWS no admite nombres de grupo que empiecen por `sg-`: usa nombres como los de la tabla.
+
 | Grupo | Entrada | Origen |
 |---|---|---|
-| `sg-moderniza-ec2` | 443 y 80 (HTTPS y redirección / certificado) | Internet o el rango que indique el profesorado |
-| `sg-moderniza-ec2` | 22 (solo si usas SSH) | **Tu IP** (`x.x.x.x/32`), nunca `0.0.0.0/0` |
-| `sg-moderniza-rds` | 3306 | **Solo** el grupo `sg-moderniza-ec2` |
+| `moderniza-ec2-sg` | 443 y 80 (HTTPS y redirección / certificado) | Internet o el rango que indique el profesorado |
+| `moderniza-ec2-sg` | 22 (solo si usas SSH) | **Tu IP** (`x.x.x.x/32`), nunca `0.0.0.0/0` |
+| `moderniza-rds-sg` | 3306 | **Solo** el grupo `moderniza-ec2-sg` |
 
 ```bash
 aws ec2 authorize-security-group-ingress --group-id <sg-rds> --protocol tcp --port 3306 --source-group <sg-ec2>
@@ -82,7 +86,7 @@ aws rds describe-db-engine-versions --engine mysql --query "DBEngineVersions[].E
 
 Crea la instancia desde la consola o con la CLI. Las opciones obligatorias son:
 - **acceso público: No**;
-- grupo `sg-moderniza-rds`;
+- grupo `moderniza-rds-sg`;
 - base inicial `attendize`;
 - copias automáticas activadas si el laboratorio lo permite;
 - etiquetas de proyecto, alumno y fecha de retirada.
@@ -96,12 +100,12 @@ aws rds create-db-instance --region <REGION> \
 aws rds wait db-instance-available --db-instance-identifier moderniza-<ALUMNO> --region <REGION>
 ```
 
-Si tu laboratorio limita los tipos o el almacenamiento, usa los que indique el profesorado.
+Si tu laboratorio limita los tipos o el almacenamiento, usa los que indique el profesorado. En el ensayo del profesorado (Learner Lab, noviembre de 2026) la versión por defecto fue MySQL 8.4 y funcionó sin cambios.
 
 ## 4. EC2
 
-1. Lanza una instancia **Amazon Linux 2023** con el grupo `sg-moderniza-ec2`, el perfil de instancia del laboratorio (por ejemplo `LabInstanceProfile`, que da acceso a ECR y Parameter Store sin guardar claves) y `instalar-ec2.sh` como *User data*.
-2. Conéctate por EC2 Instance Connect o SSH (puerto 22 solo desde tu IP).
+1. Lanza una instancia **Amazon Linux 2023** con el grupo `moderniza-ec2-sg`, el perfil de instancia del laboratorio (por ejemplo `LabInstanceProfile`, que da acceso a ECR y Parameter Store sin guardar claves) y `instalar-ec2.sh` como *User data*.
+2. Conéctate con **Session Manager** (EC2 → Conectar → Session Manager), que funciona con `LabInstanceProfile` y no necesita abrir el puerto 22. También puedes usar EC2 Instance Connect o SSH (puerto 22 solo desde tu IP).
 3. Copia la carpeta `moderniza/deploy/aws` a la instancia (`git clone` de tu repositorio o `scp`).
 
 ## 5. Secretos en Parameter Store
@@ -200,7 +204,7 @@ aws rds create-db-snapshot --region <REGION> --db-instance-identifier moderniza-
 aws rds wait db-snapshot-available --region <REGION> --db-snapshot-identifier moderniza-<ALUMNO>-tarea05-rc1-<AAAAMMDD>
 ```
 
-**Restauración en OTRA instancia** (nunca sobre la original). Anota la hora de inicio y la de fin:
+**Restauración en OTRA instancia** (nunca sobre la original). Anota la hora de inicio y la de fin (en el ensayo del profesorado tardó unos 8 minutos):
 
 ```bash
 aws rds restore-db-instance-from-db-snapshot --region <REGION> \
