@@ -109,9 +109,13 @@ docker compose exec moderniza php artisan migrate
 # ¿Qué migraciones de Moderniza se han ejecutado?
 docker compose exec moderniza php artisan migrate:status
 
-# Si cambias la migración después de ejecutarla: deshacer y repetir
+# Si cambias la migración DESPUÉS de ejecutarla bien (salió DONE): deshacer y repetir
 docker compose exec moderniza php artisan migrate:rollback
 docker compose exec moderniza php artisan migrate
+
+# Si "migrate" FALLÓ a mitad (no salió DONE): la tabla quedó creada a medias.
+# Bórrala solo a ella y vuelve a lanzar "migrate" (rollback aquí no sirve):
+docker compose exec moderniza php artisan tinker --execute="Schema::dropIfExists('event_sessions');"
 
 # Ver las rutas de Moderniza
 docker compose exec moderniza php artisan route:list --except-vendor
@@ -128,6 +132,9 @@ docker compose exec db mysql -uattendize -pattendize attendize -e "SELECT id, ac
 
 **Persistencia:** `docker compose stop` y `docker compose start` conservan los datos.
 **No uses** `docker compose down -v`: `-v` borra el volumen de MySQL (Attendize y Moderniza).
+**No uses nunca** `migrate:fresh`, `migrate:refresh`, `migrate:reset` ni `db:wipe`: la base es **la de Attendize** y borrarías todas sus tablas (cuentas, usuarios, eventos).
+
+Escribe **siempre** `docker compose exec moderniza …` (o `moderniza-vite …`) delante de `php`, `composer` o `npm`. Si los ejecutas directamente en Windows, se usa el PHP de Windows con la carpeta de Attendize y salen errores como «PHP Fatal error … ReturnTypeWillChange».
 
 ---
 
@@ -145,7 +152,30 @@ docker compose exec db mysql -uattendize -pattendize attendize -e "SELECT id, ac
 
 ---
 
-## 5. Estructura de Moderniza
+## 5. Si algo falla
+
+Empieza siempre por ver el estado de los contenedores: `docker compose ps -a`.
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| Attendize (8080/8081) da **504** tras arrancar | El contenedor `web` cambia los permisos de todo el proyecto al arrancar; en Windows tarda 15–20 min. | Esperar. `docker compose logs web` muestra el progreso. |
+| `port is already allocated` al hacer `up` | Otro proyecto Docker (o el MySQL de XAMPP) usa 3306, 5173, 8000 u 8080. | `docker ps --format "table {{.Names}}\t{{.Ports}}"` para ver cuál; pararlo con `docker compose -p NOMBRE stop` (o parar MySQL en XAMPP). |
+| Contenedores «Up» pero con `3306/tcp` o `5173/tcp` sin `0.0.0.0:` delante | Arrancaron mientras el puerto estaba ocupado y se quedaron a medio conectar. | `docker compose down` (**sin** `-v`) y `docker compose up -d`. |
+| Todos los contenedores en `Exited (255)` | Docker Desktop o WSL se reinició. | `docker compose up -d` (arranca **todos**, no solo `moderniza`). |
+| `moderniza` repite «Esperando a MySQL…» aunque `docker compose logs db` diga «ready for connections» | El problema no es MySQL. A los 10 intentos el registro muestra el error real. | Si es `getaddrinfo for db failed`: `docker compose restart moderniza moderniza-vite` (o `docker compose up -d --force-recreate moderniza moderniza-vite`). |
+| Attendize: «No application encryption key has been specified» | El `.env` de la raíz tiene `APP_KEY=` vacío. | `docker compose exec web php artisan key:generate` **una sola vez** y `docker compose up -d --force-recreate web worker` (el contenedor lee la clave al crearse). |
+| `WARN … the attribute 'version' is obsolete` | Primera línea del `docker-compose.yml` original de Attendize. | Es normal: ignóralo. No modifiques ese archivo. |
+| `./scripts/setup: not found` al construir Attendize | Git para Windows convirtió los finales de línea a CRLF. | Clonar de nuevo con `git clone -c core.autocrlf=false -c core.eol=lf …`. |
+| Aparecen archivos raros con «U» (por ejemplo `[________,`) | Se pegó código de una pista en la terminal: el `>` de Bash crea archivos. | Borrarlos (en VS Code, *Discard Changes*) y escribir el código **en el editor**. |
+| VS Code: «Laravel Extra Intellisense error» o «php-cs-fixer: General error» | Esas extensiones usan el PHP de Windows; PHP solo está en Docker. | Desactivarlas para este proyecto (*Disable (Workspace)*). |
+| VS Code: «Imported class '…Factory' is not used» en los modelos | Falso aviso: la clase se usa en el comentario `@use HasFactory<…>`. | No borrar el `use`. |
+| Las pruebas tardan 1–3 minutos | En Windows, la carpeta compartida con Docker es lenta. | Es normal. Antes de lanzarlas, mira el panel *Problems* de VS Code: un error de sintaxis se ve al instante. |
+
+**Si tienes que volver a montar Attendize** (por ejemplo, en otro ordenador), sigue tu documentación de la Tarea 1 y comprueba al final que `grep APP_KEY .env` muestra `APP_KEY=base64:…`. Si está vacía, aplica la solución de la tabla.
+
+---
+
+## 6. Estructura de Moderniza
 
 ```
 moderniza/
@@ -168,7 +198,7 @@ moderniza/
 └─ docker/                   Dockerfile · entrypoint.sh · crear-bd-pruebas.sql
 ```
 
-## 6. Versiones
+## 7. Versiones
 
 PHP 8.3 · Laravel 13 · inertiajs/inertia-laravel 3 · @inertiajs/react 3 · React 19 · TypeScript 5 · Vite 8 · Tailwind CSS 4 · PHPUnit 12 · MySQL del servicio `db` de Attendize.
 

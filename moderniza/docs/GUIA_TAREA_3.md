@@ -3,21 +3,43 @@
 Esta guía os acompaña TODO a TODO. Para cada uno tenéis:
 
 - **Para entenderlo**: qué es lo que vais a programar, para qué sirve y en qué paso del recorrido React → Inertia → Laravel → MySQL estáis (el esquema del enunciado).
-- **Qué hacer**: el objetivo en una frase.
+- **Qué hacer**: lo que tenéis que conseguir en ese TODO, resumido (qué debe quedar hecho cuando terminéis). No explica cómo: para eso están el ejemplo y la pista.
 - **Ejemplo en la plantilla**: código ya resuelto que se parece a lo que tenéis que escribir.
-- **Pista**: el código con huecos (`___`). Rellenadlos; no lo copiéis sin entenderlo.
-- **Comprueba**: la orden que os dice si está bien **antes** de pasar al siguiente.
+- **Pista**: el código con huecos (`___`). Rellenadlos; no lo copiéis sin entenderlo. Escribidlo en el **editor**: nunca peguéis código de una pista en la terminal (Bash interpreta el `>` y crea archivos con nombres raros).
+- **Comprueba**: la orden que os dice si está bien **antes** de pasar al siguiente. Antes de lanzarla, mirad el panel *Problems* de VS Code: un error de sintaxis (círculo rojo) se ve al instante. En Windows, las comprobaciones con base de datos tardan de 1 a 3 minutos.
 - **Error típico**: lo que suele fallar y cómo arreglarlo.
 
 Mirad primero cómo debe quedar (siguiente apartado). Haced los TODO **en orden** (T3-1 → T3-7). Cada comprobación solo necesita los TODO anteriores.
 
 Todas las órdenes se ejecutan desde la carpeta raíz del repositorio (donde está `docker-compose.yml`).
 
+## Cómo se guarda el trabajo en Git
+
+**Todos los TODO de esta tarea se hacen en la misma rama de trabajo, `t3-crear-sesion`**, con **un commit por cada TODO**. Al final se abre **una sola Pull Request**.
+
+```
+tarea-03-mejora-completa ──●───────────────────────────●── (tarea-03-entrega)
+   (tarea-03-inicio)        \                         /
+                             └─ t3-crear-sesion       /
+                                 ●  T3-1 migración    /
+                                 ●  T3-2 modelos     /
+                                 ●  T3-3 validación /
+                                 ●  …              /
+                                 ●  T3-7 pruebas ── Pull Request (Closes #n)
+```
+
+- **Una sola rama** porque los siete TODO son partes de **una misma funcionalidad** («crear una sesión del programa», vuestra Issue del RF03) y cada uno depende del anterior: el modelo necesita la tabla, el controlador necesita el modelo… Por separado no funcionarían.
+- **Un commit por TODO** (cuando su comprobación sale en verde), con un mensaje que diga qué habéis hecho, por ejemplo `T3-1: tabla event_sessions con claves externas e índice`. Así el historial cuenta el trabajo paso a paso, se ve en qué paso se rompió algo y el profesorado puede revisar cada parte.
+- **Al terminar el T3-7:** Pull Request de `t3-crear-sesion` hacia `tarea-03-mejora-completa` (**no** hacia `develop`) con `Closes #n`; se revisa y se une (*Merge*), y sobre `tarea-03-mejora-completa` se crea y se sube la etiqueta `tarea-03-entrega`.
+- Solo se crea **otra rama** si aparece **otra cosa distinta** (por ejemplo, un fallo que no tiene que ver con la sesión), con su propia Issue.
+
+Así se trabaja también en las empresas: una rama corta por funcionalidad, commits pequeños y una Pull Request que alguien revisa antes de unirla. Cómo hacerlo desde VS Code o desde la terminal: manuales `Tarea3.7` y `Tarea3.8`.
+
 ---
 
 ## Así debe quedar
 
-Estas capturas son de la solución, con datos ficticios. Muestran lo que tiene que hacer la aplicación cuando terminéis; los colores y estilos son los de la plantilla.
+Estas capturas son de la solución, con datos ficticios. Muestran lo que tiene que hacer la aplicación cuando terminéis; los colores y estilos son los de la plantilla (cómo cambiarlos: anexo del final).
 
 **1. Mis eventos** (ya viene hecha: es el ejemplo resuelto). Desde aquí se entra en el programa de cada evento.
 
@@ -106,7 +128,17 @@ docker compose exec moderniza php artisan test --group=t3-1
 
 Debe salir `DONE` en la migración y `OK (3 tests…)` en las pruebas.
 
-**Error típico:** `Cannot add foreign key constraint` (o `errno: 150`). Habéis usado `foreignId()`, que crea una columna `BIGINT`, pero en Attendize `accounts.id` y `events.id` son `INT UNSIGNED`. Usad `unsignedInteger()` + `foreign()`. Si la migración ya se había ejecutado mal: `php artisan migrate:rollback` y otra vez `php artisan migrate`.
+**Error típico:** `Cannot add foreign key constraint` (o `errno: 150`). Habéis usado `foreignId()`, que crea una columna `BIGINT`, pero en Attendize `accounts.id` y `events.id` son `INT UNSIGNED`. Usad `unsignedInteger()` + `foreign()`.
+
+**Otro error típico:** `1072 Key column 'event_id ' doesn't exist`: hay un espacio dentro de las comillas del nombre de una columna (`'event_id '`).
+
+**Si `migrate` falla a mitad** (no sale `DONE`), MySQL ya ha creado la tabla, pero Laravel no apunta la migración como hecha, así que `migrate:rollback` no la borra. Borrad solo esa tabla y volved a lanzar `migrate`:
+
+```bash
+docker compose exec moderniza php artisan tinker --execute="Schema::dropIfExists('event_sessions');"
+```
+
+Si la migración salió bien (`DONE`) y después queréis cambiarla: `migrate:rollback` y otra vez `migrate`. **Nunca** uséis `migrate:fresh`, `migrate:refresh`, `migrate:reset` ni `db:wipe`: la base es **la de Attendize** y borraríais todas sus tablas.
 
 ---
 
@@ -336,7 +368,7 @@ Sin errores. Después, en el navegador: **Mis eventos → Programa de sesiones �
 - poned fin anterior al inicio y aforo 0: errores claros y **no se pierde lo escrito**;
 - datos correctos: aparece «La sesión se ha creado correctamente» y la sesión sale en la tabla.
 
-**Error típico:** el campo se ve pero no se guarda: el `id` del `Field` o el nombre en `setData('...')` no coinciden con el de Laravel (`starts_at`, `ends_at`, `room`, `capacity`). Si `npm run types` dice que un nombre no existe en `SessionForm`, revisad cómo lo habéis escrito.
+**Error típico:** el campo se ve pero no se guarda: el `id` del `Field` o el nombre en `setData('...')` no coinciden con el de Laravel (`starts_at`, `ends_at`, `room`, `capacity`). Si `npm run types` dice que un nombre no existe en `SessionForm`, revisad cómo lo habéis escrito. Y si al pulsar «Guardar sesión» no pasa nada, es que `submit()` todavía no envía el formulario: no es un fallo del servidor.
 
 ---
 
@@ -399,3 +431,26 @@ $this->assertDatabaseCount('event_sessions', _);
 - [ ] `docker compose stop` y `docker compose start`: la sesión sigue ahí.
 - [ ] Teclado (`Tab`) y vista móvil revisados.
 - [ ] Pull Request con `Closes #n` integrada y etiqueta `tarea-03-entrega` subida.
+
+## Anexo · Dónde está el aspecto de la aplicación (y cómo cambiarlo)
+
+El aspecto de Moderniza lo dan **dos cosas que trabajan juntas**:
+
+- **React** (`moderniza/resources/js/`) decide **qué hay** en cada pantalla: páginas (`pages/`), componentes (`components/`), formularios y botones. Los colores y tamaños se ponen con **clases de Tailwind CSS** en el atributo `className`, por ejemplo `className="bg-white p-4"`.
+- **Tailwind CSS** (`moderniza/resources/css/app.css`) es la **guía visual** de toda la aplicación. Ahí están el fondo de la página (`body`), las clases propias que usan todas las pantallas (`.btn-primary`, `.btn-secondary`, `.link`, `.card`, `.input`) y el contorno de foco para el teclado (`:focus-visible`).
+
+`moderniza/resources/js/components/Layout.tsx` es el marco común de todas las páginas (cabecera, título y menú).
+
+**Ejemplos** (cada clase de Tailwind hace una sola cosa; al guardar, Vite actualiza el navegador solo):
+
+| Quiero… | Dónde | Cambio |
+|---|---|---|
+| Fondo lila en toda la aplicación | `app.css`, regla `body` | `bg-slate-50` → `bg-violet-100` |
+| Cabecera de otro color | `Layout.tsx`, etiqueta `<header>` | `bg-white` → `bg-violet-200` |
+| Botón principal de otro color | `app.css`, clase `.btn-primary` | `bg-blue-700 … hover:bg-blue-800` → `bg-violet-700 … hover:bg-violet-800` |
+| Botones con los bordes muy redondeados | `app.css`, clases `.btn-primary` y `.btn-secondary` | `rounded` → `rounded-full` (o `rounded-lg`, menos redondeado) |
+**Reglas para cambiarlo bien:**
+
+- Cambiad la **guía** (`app.css` y `Layout.tsx`), no un color suelto en cada página: así toda la aplicación queda coherente.
+- Mantened el **contraste** (texto oscuro sobre fondo claro y botones con texto blanco sobre un color oscuro, por ejemplo `-700` u `-800`) y el **contorno de foco** visible: es accesibilidad y se evalúa.
+- Un cambio de aspecto **no forma parte de los TODO**: hacedlo en **otra rama** (por ejemplo, `estilo-lila`), con su propio commit, sin mezclarlo con `t3-crear-sesion`. Vuestras pantallas ya no se verán como las capturas: es normal.
