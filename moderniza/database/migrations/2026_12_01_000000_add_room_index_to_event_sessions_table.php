@@ -22,6 +22,15 @@ return new class extends Migration
 
     public function down(): void
     {
+        // MySQL usa este índice para la clave externa event_id (su índice
+        // automático desaparece al crear este). Antes de borrarlo se crea un
+        // índice solo de event_id; si no, MySQL da el error 1553.
+        if (! Schema::hasIndex('event_sessions', ['event_id'])) {
+            Schema::table('event_sessions', function (Blueprint $table) {
+                $table->index('event_id', 'event_sessions_event_id_index');
+            });
+        }
+
         Schema::table('event_sessions', function (Blueprint $table) {
             $table->dropIndex('event_sessions_event_room_start_index');
         });
